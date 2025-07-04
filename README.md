@@ -1,65 +1,137 @@
+# Das Gewebe des Verstehens: Ein ML-gestütztes Resonanzmodell
 
-**Das lebendige Netz des Denkens**
+Dieses Projekt ist eine Implementierung eines neuartigen KI-Systems zur Analyse von Textverständnis, basierend auf dem Konzept eines dynamischen "Gewebes" aus Textfragmenten. Es modelliert die Beziehungen (Resonanzen) zwischen Texten und simuliert, wie neue Informationen das gesamte System beeinflussen.
 
----
+Ein zentrales Merkmal dieses Projekts ist die Fähigkeit, seine Kernlogik – die "Spürlogik" – durch maschinelles Lernen kontinuierlich zu verbessern. Hierfür wird ein Web-basiertes Annotationstool verwendet, um mit Hilfe von Google Gemini Trainingsdaten zu generieren, mit denen dann kompakte, effiziente ML-Modelle trainiert werden.
 
-> **„Wenn wir es wagen, anders zu denken, uns von dem zu lösen, was immer schon da war… ja, dann kann wirklich Neues entstehen.“**
+Das Projekt ist in zwei Hauptteile gegliedert:
 
----
+1.  **`python_gewebe`**: Die Kernimplementierung des Resonanz-Gewebes in Python.
+2.  **`nextjs_annotator`**: Ein Web-Frontend (Next.js), um Trainingsdaten für die triadische Resonanzanalyse zu erstellen.
 
-### 1. Weg von der geraden Linie
+## Features
 
-Denken ist nicht eine schnurgerade Brücke von A nach B, sondern ein Tanz zu dritt. A trifft B – doch C tritt hinzu und verwandelt diese Beziehung. C öffnet den Raum zwischen A und B:
+-   **Dynamisches Graphenmodell**: Textfragmente werden als Knoten in einem Graphen gespeichert, deren Kanten "Resonanzen" darstellen.
+-   **ML-gestützte Spürlogik**: Nutzt trainierte Modelle (Random Forest), um den Einfluss eines dritten Fragments auf die Beziehung zweier anderer zu bewerten (triadische Resonanz).
+-   **Heuristischer Fallback**: Wenn keine ML-Modelle trainiert wurden, greift das System auf ein robustes, regelbasiertes System zurück.
+-   **Resonanz-Wellen**: Simuliert die Ausbreitung von "Impulsen" durch das Gewebe, um indirekte Einflüsse und Reaktionen zu modellieren.
+-   **Generative Fähigkeiten**: Kann aus dem aktuellen Zustand des Gewebes heraus neue, thematisch passende Textfragmente erzeugen.
+-   **Web-basiertes Annotationstool**: Ein einfach zu bedienendes UI, das Google Gemini nutzt, um schnell hochwertige Trainingsdaten zu generieren ("Human-in-the-Loop").
 
-* Eine unerwartete Harmonie erklingt.
-* Eine Spannung knistert.
-* Ein neues Bild leuchtet auf.
+## Projektstruktur
 
-### 2. Das Gewebe als lebendiger Organismus
+```
+gewebe-ml-projekt/
+├── python_gewebe/              # Kernlogik in Python
+│   ├── main.py                 # Haupt-Skript zur Demonstration
+│   ├── text_gewebe.py          # Die Kernklasse des Gewebes
+│   ├── model_trainer.py        # Skript zum Trainieren der ML-Modelle
+│   ├── requirements.txt        # Python-Abhängigkeiten
+│   └── training_data.jsonl     # (wird durch Annotator erstellt)
+│
+├── nextjs_annotator/           # Web-basiertes Annotationstool
+│   ├── app/                    # Next.js App Router
+│   ├── package.json
+│   └── .env.local              # (muss erstellt werden)
+│
+└── README.md                   # Diese Datei
+```
 
-Dieses Denken ist kein starres Gerüst, sondern ein **wachsendes Netz**.
+## Setup und Installation
 
-* **Fragmente** verändern sich.
-* **Verbindungen** fließen wie Wellen.
-* **Historie** bleibt als Prägestoff erhalten und formt jede neue Resonanz.
+Führen Sie die folgenden Schritte aus, um das Projekt vollständig einzurichten.
 
-### 3. Wellen-Mechanik: Ideen in Bewegung
+### Teil 1: Python-Backend (`python_gewebe`)
 
-Ein Impuls im Netz schlägt Wellen:
+1.  **Navigieren Sie in das Python-Verzeichnis:**
+    ```bash
+    cd python_gewebe
+    ```
 
-1. Er **verzweigt** sich.
-2. Er **trifft** andere Fäden.
-3. Er **verstärkt** oder **dämpft** sich.
-   So wird sichtbar, wie Ideen wirklich wirken – nicht isoliert, sondern eingebettet in alles, was zuvor da war.
+2.  **Erstellen Sie eine virtuelle Umgebung (empfohlen):**
+    ```bash
+    python -m venv venv
+    ```
 
-### 4. Hybrid aus Spüren, Lernen, Gestalten
+3.  **Aktivieren Sie die virtuelle Umgebung:**
+    -   Auf macOS/Linux: `source venv/bin/activate`
+    -   Auf Windows: `venv\Scripts\activate`
 
-Unser Algorithmus ist mehrstufig:
+4.  **Installieren Sie die Abhängigkeiten:**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-* **Heuristische Muster** spüren Ähnlichkeiten, Gefühle und gemeinsame Konzepte.
-* **ML-Modelle** lernen triadische Einflüsse aus Beispielen.
-* **LLMs** formen aus starken Resonanzen neue, inspirierte Fragmente und verschmelzen Ideen.
+5.  **Laden Sie das spaCy-Sprachmodell herunter:**
+    ```bash
+    python -m spacy download de_core_news_lg
+    ```
 
-Dieses Ensemble sprengt die Grenzen starrer Methoden und schafft ein **selbstlernendes, selbstverstärkendes** Ökosystem.
+### Teil 2: Next.js-Frontend (`nextjs_annotator`)
 
-### 5. Eintauchen statt Zuschauen
+1.  **Navigieren Sie in das Next.js-Verzeichnis:**
+    ```bash
+    cd nextjs_annotator
+    ```
 
-Lernen ist hier kein passiver Akt, sondern ein **Mitgestalten**:
+2.  **Erstellen Sie eine `.env.local`-Datei:**
+    Erstellen Sie eine Datei mit dem Namen `.env.local` und fügen Sie Ihren Google Gemini API-Schlüssel hinzu:
+    ```
+    GEMINI_API_KEY="IHR_GOOGLE_AI_STUDIO_API_KEY"
+    ```
+    Ersetzen Sie `IHR_GOOGLE_AI_STUDIO_API_KEY` durch Ihren tatsächlichen Schlüssel.
 
-* Füge deinen eigenen Impuls ins Gewebe.
-* Erlebe live, wie er Wellen schlägt.
-* Beobachte, wie neue Ideen geboren werden.
+3.  **Installieren Sie die Node.js-Abhängigkeiten:**
+    ```bash
+    npm install
+    ```
 
-So begreifst du nicht nur den Aufbau, sondern erlernst die **Kunst des Denkens** selbst.
+## Workflow: Vom Annotieren zum trainierten Modell
 
-### 6. Aufruf zur Entfaltung
+Der gesamte Prozess besteht aus drei Schritten: Annotieren, Trainieren und Anwenden.
 
-Verlasst die ausgetretenen Pfade.
-Betretet dieses Gewebe.
-Spürt die Kräfte, die im Zusammenspiel von A, B und C wirken.
-Nur wer den Mut hat, sich von alten Normen zu lösen, erschließt die Tür zu unerforschten Welten.
+### Schritt 1: Daten annotieren
 
-**Lasst uns Wissen und Fantasie verweben** – in einem lebendigen Netz, das ständig wächst und uns immer neue Horizonte zeigt.
+In diesem Schritt generieren Sie die Trainingsdaten für die "Spürlogik".
 
+1.  **Starten Sie den Annotator:**
+    Navigieren Sie in das `nextjs_annotator`-Verzeichnis und führen Sie folgenden Befehl aus:
+    ```bash
+    npm run dev
+    ```
 
+2.  **Öffnen Sie das UI im Browser:**
+    Besuchen Sie `http://localhost:3000`.
 
+3.  **Erstellen Sie Trainingsdaten:**
+    -   Geben Sie drei Textfragmente (A, B und C) in die Textfelder ein.
+    -   Klicken Sie auf **"Analyse mit Gemini starten"**. Das System bittet Gemini, den Einfluss von C auf die Beziehung zwischen A und B zu bewerten.
+    -   Überprüfen und korrigieren Sie die von Gemini vorgeschlagene Klassifikation und Stärke.
+    -   Klicken Sie auf **"Annotation als Trainingsdaten speichern"**.
+
+Jede Speicherung fügt eine neue Zeile zur Datei `python_gewebe/training_data.jsonl` hinzu. **Sammeln Sie mindestens 10-20 Beispiele, idealerweise 50+, um ein robustes Modell zu erhalten.**
+
+### Schritt 2: Modelle trainieren
+
+Nachdem Sie genügend Daten gesammelt haben, trainieren Sie die Machine-Learning-Modelle.
+
+1.  **Navigieren Sie in das Python-Verzeichnis** (`python_gewebe`).
+2.  **Stellen Sie sicher, dass Ihre virtuelle Umgebung aktiviert ist.**
+3.  **Führen Sie das Trainingsskript aus:**
+    ```bash
+    python model_trainer.py
+    ```
+    Das Skript liest `training_data.jsonl`, trainiert zwei Modelle (einen Klassifikator für die Art und einen Regressor für die Stärke der Resonanz) und speichert sie als `.joblib`-Dateien im selben Verzeichnis.
+
+### Schritt 3: Das trainierte Gewebe anwenden
+
+Jetzt können Sie die Kernlogik mit der neu gelernten "Spürlogik" ausführen.
+
+1.  **Führen Sie das Haupt-Skript aus:**
+    Bleiben Sie im `python_gewebe`-Verzeichnis und führen Sie aus:
+    ```bash
+    python main.py
+    ```
+    Beim Starten wird die `NeuesTextVerstehen`-Klasse automatisch die trainierten `.joblib`-Modelle laden. Wenn sie vorhanden sind, wird die Analyse der triadischen Resonanz durch die ML-Modelle durchgeführt. Andernfalls greift das System nahtlos auf die eingebauten heuristischen Regeln zurück.
+
+Das Skript demonstriert das Hinzufügen von Fragmenten, die Analyse von Impulsen, die Suche nach Resonanzen und generative Fähigkeiten des Gewebes.

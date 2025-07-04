@@ -1,0 +1,1157 @@
+########################################
+# Datei: ./main.py
+########################################
+
+########################################
+# Datei: ./main.py
+# Beschreibung: Beispielskript zur Verwendung der ML-gestützten NeuesTextVerstehen-Klasse.
+########################################
+
+from text_gewebe import NeuesTextVerstehen
+
+# HINWEIS: Bevor Sie dieses Skript ausführen, stellen Sie sicher, dass Sie:
+# 1. Mit dem Annotations-UI (dem Next.js-Teil) Trainingsdaten in 'training_data.jsonl' gesammelt haben.
+# 2. Das Trainingsskript 'model_trainer.py' ausgeführt haben, um die .joblib-Modelle zu erstellen.
+#
+# Wenn keine Modelle trainiert wurden, läuft das Skript im heuristischen Fallback-Modus.
+
+# Erstelle eine Instanz des Gewebes.
+# Beim Initialisieren wird automatisch nach trainierten Modellen gesucht.
+gewebe = NeuesTextVerstehen()
+
+# Füge einige Textfragmente hinzu, um ein komplexes Gewebe zu erzeugen
+fragmente_zum_hinzufuegen = [
+    "Das Gefühl, das Muster im Ganzen zu erfassen, ist schwer.", # Index 0
+    "Es ist immer noch ein Versuch, die Wellen zu zählen.", # Index 1
+    "Dieser Versuch ist notwendig, um das Gewebe als Ganzes zu verstehen.", # Index 2
+    "Manchmal fühlt es sich harmonisch an, manchmal spannungsreich.", # Index 3
+    "Die Fähigkeit, den eigenen Zustand zu fühlen, ist ein Ziel.", # Index 4
+    "Ein Beispiel dafür ist die Analyse der dominanten Resonanz-Arten.", # Index 5
+    "Aber die wahre Komplexität liegt in der Spürlogik.", # Index 6
+    "Das Zählen der Wellen hilft, die Muster zu erfassen.", # Index 7 (für Common Ground Beispiel)
+    "Die Spürlogik führt zu einem tieferen Verstehen.", # Index 8 (für Brücken-Beispiel)
+    "Das Zählen ist aber nicht das Verstehen selbst." # Index 9 (für Widerspruchs-Beispiel)
+]
+
+print("\n=== Aufbau des Gewebes ===")
+for fragment in fragmente_zum_hinzufuegen:
+    gewebe.fuege_ein(fragment)
+
+print("\n" + "="*40)
+print("Zustand des Gewebes nach dem Aufbau:")
+gewebe.fuehle_zustand_des_gewebes()
+print("="*40)
+
+
+print("\n=== Analyse der Gewebe-Reaktion ===")
+impuls = "Wie fühlt sich das Verstehen an?"
+print(f"Spüre Reaktion auf Impuls: '{impuls}'")
+reaktion_data = gewebe.spuere_reaktion_des_gewebes(impuls)
+# spuere_reaktion_des_gewebes gibt jetzt ein Dictionary zurück, der Bericht ist ein Teil davon
+print(reaktion_data['report'])
+print("="*40)
+
+
+print("\n=== Suche nach spezifischen Resonanzen ===")
+suche_impuls = "Was ist schwer zu erfassen?"
+print(f"Suche Fragmente, die auf '{suche_impuls}' reagieren...")
+passende_fragmente = gewebe.finde_fragmente_mit_resonanz(suche_impuls, gewuenschte_arten=['VERSTAERKUNG', 'ERGAENZUNG'], mindest_staerke=0.4)
+print("\nPassende Fragmente gefunden:")
+if passende_fragmente:
+    for res in passende_fragmente:
+        print(f"- {res}")
+else:
+    print("- Keine passenden Fragmente mit den Kriterien gefunden.")
+print("="*40)
+
+
+print("\n=== Generative Antwort aus dem Gewebe ===")
+antwort_impuls = "Gibt es einen Konflikt im Verstehen?"
+print(f"Generiere Antwort auf Impuls: '{antwort_impuls}' (Ziel: KONTRAST)")
+antwort = gewebe.antworte_aus_resonanz(antwort_impuls, ziel_art='KONTRAST')
+print(f"\nGeneriertes Fragment wurde dem Gewebe hinzugefügt: '{antwort}'")
+print("="*40)
+
+print("\n=== Zustand des Gewebes nach generativer Antwort ===")
+gewebe.fuehle_zustand_des_gewebes()
+print("="*40)
+
+print("\n=== Logisches Löschen und Verschmelzen ===")
+print("Lösche Fragment 1...")
+gewebe.loesche_fragment(1)
+
+print("\nVerschmelze Fragment 0 und 2...")
+# Beachten Sie, dass die Indices der Fragmente gleich bleiben, auch wenn eines gelöscht wurde.
+gewebe.verschmelze_fragmente(0, 2)
+print("="*40)
+
+print("\n=== Finaler Zustand des Gewebes ===")
+gewebe.fuehle_zustand_des_gewebes()
+print("\nInterne Resonanz-Struktur (Ausschnitt):")
+# Eine kleine, lesbare Ansicht der Struktur
+for i in list(gewebe._resonanzen_struktur.keys())[:3]:
+    print(f"  Von {i}: {list(gewebe._resonanzen_struktur[i].values())[:3]}")
+
+print("\nSkript-Ausführung beendet.")
+
+########################################
+# Datei: ./text_gewebe.py
+########################################
+
+########################################
+# Datei: ./text_gewebe.py
+# Version: ML-Integriert
+# Beschreibung: Die Kernklasse des Verstehens-Gewebes, jetzt mit ML-gestützter triadischer Resonanz.
+########################################
+
+import re
+import random
+from collections import Counter
+import json
+import os
+import spacy
+import numpy as np
+import joblib
+
+# Liste aller bekannten Resonanz-Arten
+ALL_RESONANCE_TYPES = [
+    'VERSTAERKUNG', 'KONTRAST', 'ERGAENZUNG', 'FORTSETZUNG', 'BEISPIEL',
+    'HINTERGRUND', 'PERSPEKTIVE_WECHSEL', 'EMOTIONALE_HARMONIE',
+    'EMOTIONALE_SPANNUNG', 'STRUKTURELLE_ANALOGIE', 'NEUTRAL_SCHWACH',
+    'KONFLIKT', 'ECHTBEZUG', 'ENTWICKLUNG'
+]
+
+class ResonanzVerbindung:
+    """Repräsentiert eine gerichtete Resonanzverbindung zwischen zwei Fragmenten."""
+    def __init__(self, quelle_index: int, ziel_index: int, art: str, staerke: float, kontext: str):
+        self.quelle = quelle_index
+        self.ziel = ziel_index
+        self.art = art
+        self.staerke = staerke
+        self.kontext = kontext
+
+    def __repr__(self):
+        return f"ResonanzVerbindung(q={self.quelle}, z={self.ziel}, art='{self.art}', staerke={self.staerke:.2f})"
+
+    def to_dict(self):
+        return {'quelle': self.quelle, 'ziel': self.ziel, 'art': self.art, 'staerke': self.staerke, 'kontext': self.kontext}
+
+class ResonanzWelle:
+    """Repräsentiert eine Welle, die sich durch das Gewebe ausbreitet."""
+    def __init__(self, ursprung: int, art: str, staerke: float, pfad: list[int]):
+        self.ursprung = ursprung
+        self.art = art
+        self.staerke = staerke
+        self.pfad = pfad
+
+    def __repr__(self):
+        return f"ResonanzWelle(ursprung={self.ursprung}, art='{self.art}', staerke={self.staerke:.2f}, pfad={self.pfad})"
+        
+    def to_dict(self):
+        return {'ursprung': self.ursprung, 'art': self.art, 'staerke': self.staerke, 'pfad': self.pfad}
+
+class NeuesTextVerstehen:
+  def __init__(self):
+    self._fragmente = []
+    self._fragment_docs = {}
+    self._resonanzen_struktur = {}
+    self._gewebe_stimmung = {'harmonisch': 0.0, 'spannungsreich': 0.0, 'offen': 0.0, 'reflexiv': 0.0}
+    self._wave_arrival_effects = {}
+
+    # --- NLP und Model Setup ---
+    self._load_spacy_model()
+    self._load_ml_models()
+
+    # Heuristische Muster bleiben als Fallback und für die 2-Fragment-Analyse erhalten
+    self._spuer_muster = {
+      'VERSTAERKUNG': {'nlp_criteria': {'similarity': {'min': 0.65, 'weight': 0.5}, 'sentiment_match': {'weight': 0.3}, 'shared_concepts': {'min_count': 1, 'weight': 0.2}}, 'stimmung_effekt': {'harmonisch': 0.1, 'offen': 0.05}},
+      'KONTRAST': {'nlp_criteria': {'similarity': {'max': 0.35, 'weight': 0.5}, 'sentiment_contrast': {'weight': 0.5}}, 'stimmung_effekt': {'spannungsreich': 0.15, 'reflexiv': 0.05}},
+      'ERGAENZUNG': {'nlp_criteria': {'similarity': {'min': 0.35, 'max': 0.65, 'weight': 0.4}, 'shared_concepts': {'min_count': 2, 'weight': 0.6}}, 'stimmung_effekt': {'harmonisch': 0.1, 'offen': 0.1}},
+      'BEISPIEL': {'nlp_criteria': {'similarity': {'min': 0.55, 'weight': 0.6}, 'shared_concepts': {'min_count': 2, 'weight': 0.4}}, 'stimmung_effekt': {'offen': 0.05}},
+      'FORTSETZUNG': {'nlp_criteria': {'similarity': {'min': 0.45, 'weight': 0.5}, 'shared_concepts': {'min_count': 2, 'weight': 0.5}}, 'stimmung_effekt': {'harmonisch': 0.05, 'offen': 0.05}},
+      'EMOTIONALE_HARMONIE': {'nlp_criteria': {'sentiment_match': {'weight': 0.8}, 'similarity': {'min': 0.45, 'weight': 0.2}}, 'stimmung_effekt': {'harmonisch': 0.2, 'offen': 0.1}},
+      'EMOTIONALE_SPANNUNG': {'nlp_criteria': {'sentiment_contrast': {'weight': 0.8}, 'similarity': {'min': 0.35, 'weight': 0.2}}, 'stimmung_effekt': {'spannungsreich': 0.2, 'reflexiv': 0.1}},
+      'STRUKTURELLE_ANALOGIE': {'nlp_criteria': {'similarity': {'min': 0.45, 'weight': 0.7}, 'shared_concepts': {'min_count': 3, 'weight': 0.3}}, 'stimmung_effekt': {'reflexiv': 0.15}},
+      'NEUTRAL_SCHWACH': {'nlp_criteria': {}, 'stimmung_effekt': {'offen': 0.02}},
+      'KONFLIKT': {'nlp_criteria': {}, 'stimmung_effekt': {'spannungsreich': 0.2, 'reflexiv': 0.1}},
+      'ECHTBEZUG': {'nlp_criteria': {}, 'stimmung_effekt': {'harmonisch': 0.1, 'reflexiv': 0.1}},
+      'ENTWICKLUNG': {'nlp_criteria': {}, 'stimmung_effekt': {'offen': 0.1, 'harmonisch': 0.05}}
+    }
+
+  def _load_spacy_model(self):
+    try:
+        self.nlp = spacy.load("de_core_news_lg")
+        print("spaCy model 'de_core_news_lg' loaded successfully.")
+    except IOError:
+        print("\n[ERROR] spaCy model 'de_core_news_lg' not found. Please run: python -m spacy download de_core_news_lg")
+        print("Falling back to a blank model. Semantic features will be limited.")
+        self.nlp = spacy.blank("de")
+
+  def _load_ml_models(self):
+    """Lädt die trainierten ML-Modelle für die triadische Resonanz."""
+    self._art_classifier = None
+    self._staerke_regressor = None
+    self._label_encoder = None
+    self._ml_models_loaded = False
+    
+    art_model_path = 'triadic_art_classifier.joblib'
+    staerke_model_path = 'triadic_staerke_regressor.joblib'
+    encoder_path = 'triadic_label_encoder.joblib'
+    
+    if all(os.path.exists(p) for p in [art_model_path, staerke_model_path, encoder_path]):
+        try:
+            self._art_classifier = joblib.load(art_model_path)
+            self._staerke_regressor = joblib.load(staerke_model_path)
+            self._label_encoder = joblib.load(encoder_path)
+            self._ml_models_loaded = True
+            print("[INFO] Trainierte ML-Modelle für triadische Resonanz erfolgreich geladen.")
+        except Exception as e:
+            print(f"[WARNUNG] Fehler beim Laden der ML-Modelle: {e}. Verwende heuristische Regeln als Fallback.")
+    else:
+        print("[INFO] Keine trainierten ML-Modelle gefunden. Verwende heuristische Regeln für triadische Resonanz.")
+
+  # --- NLP Helper Methods ---
+  def _analyze_sentiment(self, doc) -> str:
+      """Simple sentiment analysis based on a small lexicon and spaCy tokens."""
+      positive_words = {"gut", "schön", "freude", "glücklich", "harmonisch", "offen", "friedlich", "sonnig", "verstehen", "klar"}
+      negative_words = {"schwer", "spannung", "konflikt", "nicht", "aber", "jedoch", "traurig", "regen", "dunkel", "sorgenvoll", "widerstand", "unerwartet", "problem", "schwierig"}
+      score = 0
+      for token in doc:
+          lemma = token.lemma_.lower()
+          if lemma in positive_words:
+              score += 1
+          elif lemma in negative_words:
+              score -= 1
+      if score > 0:
+          return 'positive'
+      elif score < 0:
+          return 'negative'
+      else:
+          return 'neutral'
+
+  def _get_shared_concepts(self, doc1, doc2) -> list[str]:
+      """Extracts shared noun, verb, and adjective lemmas between two spaCy docs."""
+      concepts1 = {token.lemma_.lower() for token in doc1 if token.pos_ in ['NOUN', 'VERB', 'ADJ'] and not token.is_stop and not token.is_punct}
+      concepts2 = {token.lemma_.lower() for token in doc2 if token.pos_ in ['NOUN', 'VERB', 'ADJ'] and not token.is_stop and not token.is_punct}
+      return list(concepts1.intersection(concepts2))
+
+  # --- Kernlogik: Spüren ---
+
+  def _spuere_art_und_staerke_der_resonanz(self, teil_a_text, teil_b_text, gesamtes_gewebe_struktur, quelle_index=None, ziel_index=None):
+    """Spürt die direkte Resonanz zwischen ZWEI Textteilen."""
+    try:
+        doc_a = self._fragment_docs.get(quelle_index) if quelle_index is not None and quelle_index in self._fragment_docs else self.nlp(teil_a_text)
+        doc_b = self._fragment_docs.get(ziel_index) if ziel_index is not None and ziel_index in self._fragment_docs else self.nlp(teil_b_text)
+
+        if not doc_a.has_vector or not doc_b.has_vector or doc_a.vocab.vectors.size == 0 or doc_b.vocab.vectors.size == 0:
+             similarity = 0.0
+        else:
+             similarity = doc_a.similarity(doc_b)
+
+        sentiment_a = self._analyze_sentiment(doc_a)
+        sentiment_b = self._analyze_sentiment(doc_b)
+        shared_concepts = self._get_shared_concepts(doc_a, doc_b)
+    except Exception as e:
+        print(f"Error during NLP processing for resonance: {e}")
+        return ResonanzVerbindung(quelle_index or -1, ziel_index or -1, 'NEUTRAL_SCHWACH', 0.05, "NLP Fehler")
+
+    potenzielle_scores = {}
+    for art, info in self._spuer_muster.items():
+        if art in ['NEUTRAL_SCHWACH', 'KONFLIKT', 'ECHTBEZUG', 'ENTWICKLUNG']: continue
+        criteria = info.get('nlp_criteria', {})
+        criteria_met_weight_sum = 0.0
+        kontext_teile = []
+
+        if 'similarity' in criteria:
+            sim_crit = criteria['similarity']
+            if similarity >= sim_crit.get('min', -1.0) and similarity <= sim_crit.get('max', 1.0):
+                 criteria_met_weight_sum += sim_crit.get('weight', 0)
+                 kontext_teile.append(f"Sim({similarity:.2f})")
+        if 'sentiment_match' in criteria and sentiment_a != 'neutral' and sentiment_a == sentiment_b:
+            criteria_met_weight_sum += criteria['sentiment_match'].get('weight', 0)
+            kontext_teile.append(f"SentMatch({sentiment_a})")
+        if 'sentiment_contrast' in criteria and sentiment_a != 'neutral' and sentiment_b != 'neutral' and sentiment_a != sentiment_b:
+            criteria_met_weight_sum += criteria['sentiment_contrast'].get('weight', 0)
+            kontext_teile.append(f"SentContr({sentiment_a} vs {sentiment_b})")
+        if 'shared_concepts' in criteria and len(shared_concepts) >= criteria['shared_concepts'].get('min_count', 0):
+            criteria_met_weight_sum += criteria['shared_concepts'].get('weight', 0)
+            kontext_teile.append(f"Concepts({len(shared_concepts)})")
+
+        if criteria_met_weight_sum > 0:
+             potenzielle_scores[art] = {'score': min(1.0, criteria_met_weight_sum), 'kontext_teile': kontext_teile}
+
+    if not potenzielle_scores:
+        return None
+
+    beste_art_above_threshold = max(potenzielle_scores, key=lambda k: potenzielle_scores[k]['score'])
+    if potenzielle_scores[beste_art_above_threshold]['score'] < 0.25: # Signifikanzschwelle
+        return None
+
+    beste_resonanz_art = beste_art_above_threshold
+    beste_resonanz_staerke = potenzielle_scores[beste_art_above_threshold]['score']
+    beste_resonanz_kontext = ", ".join(potenzielle_scores[beste_art_above_threshold]['kontext_teile'])
+    
+    return ResonanzVerbindung(quelle_index or -1, ziel_index or -1, beste_resonanz_art, beste_resonanz_staerke, beste_resonanz_kontext)
+  
+  def _spuere_einfluss_auf_resonanz(self, teil_a_text, teil_b_text, neuer_teil_text, aktuelle_resonanz_ab, gesamtes_gewebe_struktur):
+    """Spürt den Einfluss eines dritten Fragments auf die Beziehung zwischen zwei anderen. Priorisiert ML-Modelle."""
+    try:
+        index_a = self._fragmente.index(teil_a_text)
+        index_b = self._fragmente.index(teil_b_text)
+        index_neuer = self._fragmente.index(neuer_teil_text)
+    except (ValueError, IndexError):
+        return aktuelle_resonanz_ab
+
+    # --- Weg 1: ML-gestützte Vorhersage ---
+    if self._ml_models_loaded:
+        try:
+            doc_a = self._fragment_docs.get(index_a)
+            doc_b = self._fragment_docs.get(index_b)
+            doc_c = self._fragment_docs.get(index_neuer)
+            
+            if doc_a and doc_b and doc_c and doc_a.has_vector and doc_b.has_vector and doc_c.has_vector:
+                feature_vector = np.concatenate([doc_a.vector, doc_b.vector, doc_c.vector]).reshape(1, -1)
+                
+                art_index = self._art_classifier.predict(feature_vector)[0]
+                staerke = self._staerke_regressor.predict(feature_vector)[0]
+                
+                art = self._label_encoder.inverse_transform([art_index])[0]
+                staerke = max(0.0, min(1.0, staerke))
+                
+                kontext = "ML-Vorhersage (Triade)"
+                return ResonanzVerbindung(index_a, index_b, art, staerke, kontext)
+        except Exception as e:
+            print(f"[WARNUNG] ML-Vorhersage für {index_a}->{index_b} fehlgeschlagen: {e}. Nutze heuristischen Fallback.")
+    
+    # --- Weg 2: Heuristischer Fallback ---
+    # print(f"    Nutze heuristische Regeln für Einfluss auf {index_a}->{index_b}.")
+    res_neua = self._spuere_art_und_staerke_der_resonanz(neuer_teil_text, teil_a_text, self._resonanzen_struktur, quelle_index=index_neuer, ziel_index=index_a)
+    res_neub = self._spuere_art_und_staerke_der_resonanz(neuer_teil_text, teil_b_text, self._resonanzen_struktur, quelle_index=index_neuer, ziel_index=index_b)
+    
+    neue_resonanz_ab = aktuelle_resonanz_ab
+    
+    # Regel: "Gemeinsamer Nenner"
+    if (res_neua and res_neua.art in ['VERSTAERKUNG', 'ERGAENZUNG'] and res_neua.staerke > 0.6) and \
+       (res_neub and res_neub.art in ['VERSTAERKUNG', 'ERGAENZUNG'] and res_neub.staerke > 0.6):
+        neue_staerke = min(1.0, (aktuelle_resonanz_ab.staerke if aktuelle_resonanz_ab else 0) + 0.2)
+        neuer_kontext = (aktuelle_resonanz_ab.kontext + ", " if aktuelle_resonanz_ab else "") + f"durch '{neuer_teil_text[:15]}...' gefestigt"
+        neue_resonanz_ab = ResonanzVerbindung(index_a, index_b, 'ERGAENZUNG', neue_staerke, neuer_kontext)
+        return neue_resonanz_ab
+
+    # Regel: "Störenfried"
+    if (res_neua and res_neua.art == 'KONTRAST' and res_neua.staerke > 0.7) and \
+       (aktuelle_resonanz_ab and aktuelle_resonanz_ab.art == 'VERSTAERKUNG'):
+        neue_staerke = max(0.0, aktuelle_resonanz_ab.staerke - res_neua.staerke * 0.5)
+        if neue_staerke < 0.1: return None # Löschen
+        neuer_kontext = aktuelle_resonanz_ab.kontext + f", durch Kontrast von '{neuer_teil_text[:15]}...' destabilisiert"
+        neue_resonanz_ab = ResonanzVerbindung(index_a, index_b, aktuelle_resonanz_ab.art, neue_staerke, neuer_kontext)
+        return neue_resonanz_ab
+
+    return aktuelle_resonanz_ab
+
+  # --- Gewebe-Management ---
+  
+  def fuege_ein(self, text: str):
+    """Fügt ein neues Textfragment zum Gewebe hinzu und aktualisiert die Resonanzstruktur."""
+    print(f"\nFüge Fragment '{text[:50]}...' hinzu...")
+    neuer_index = len(self._fragmente)
+    self._fragmente.append(text)
+    try:
+        self._fragment_docs[neuer_index] = self.nlp(text)
+        print(f"  SpaCy Doc gecacht für Fragment {neuer_index}.")
+    except Exception as e:
+        print(f"Error caching spaCy doc: {e}")
+        self._fragment_docs[neuer_index] = self.nlp("")
+
+    self._resonanzen_struktur[neuer_index] = {}
+    
+    # 1. Direkte (dyadische) Resonanzen zum neuen Fragment spüren
+    for i in range(neuer_index):
+        if self._fragmente[i] is None: continue
+        res_neu_i = self._spuere_art_und_staerke_der_resonanz(text, self._fragmente[i], self._resonanzen_struktur, neuer_index, i)
+        if res_neu_i: self._resonanzen_struktur[neuer_index][i] = res_neu_i
+        res_i_neu = self._spuere_art_und_staerke_der_resonanz(self._fragmente[i], text, self._resonanzen_struktur, i, neuer_index)
+        if res_i_neu:
+            if i not in self._resonanzen_struktur: self._resonanzen_struktur[i] = {}
+            self._resonanzen_struktur[i][neuer_index] = res_i_neu
+
+    # 2. Indirekten (triadischen) Einfluss auf alle bestehenden Paare spüren
+    aktive_indices = [i for i in range(neuer_index) if self._fragmente[i] is not None]
+    if len(aktive_indices) > 1:
+        print(f"  Spüre Einfluss von Fragment {neuer_index} auf bestehende Resonanzen...")
+    for i in aktive_indices:
+        for j in aktive_indices:
+            if i == j: continue
+            aktuelle_resonanz = self._resonanzen_struktur.get(i, {}).get(j)
+            neue_resonanz = self._spuere_einfluss_auf_resonanz(self._fragmente[i], self._fragmente[j], text, aktuelle_resonanz, self._resonanzen_struktur)
+            
+            if neue_resonanz and neue_resonanz.staerke >= 0.1:
+                if i not in self._resonanzen_struktur: self._resonanzen_struktur[i] = {}
+                self._resonanzen_struktur[i][j] = neue_resonanz
+            elif aktuelle_resonanz is not None:
+                del self._resonanzen_struktur[i][j]
+
+    print("  Gewebe aktualisiert.")
+
+  def loesche_fragment(self, index: int):
+    """Markiert ein Fragment als gelöscht (Tombstone) und entfernt zugehörige Resonanzen."""
+    if not (0 <= index < len(self._fragmente) and self._fragmente[index] is not None):
+        print(f"Fehler: Fragment {index} kann nicht gelöscht werden (existiert nicht oder bereits gelöscht).")
+        return
+
+    print(f"\nLösche Fragment {index} logisch...")
+    self._fragmente[index] = None
+    if index in self._fragment_docs: del self._fragment_docs[index]
+    if index in self._resonanzen_struktur: del self._resonanzen_struktur[index]
+    
+    for quelle_index in list(self._resonanzen_struktur.keys()):
+        if index in self._resonanzen_struktur[quelle_index]:
+            del self._resonanzen_struktur[quelle_index][index]
+    
+    if index in self._wave_arrival_effects: del self._wave_arrival_effects[index]
+    print(f"  Fragment {index} als gelöscht markiert.")
+
+  def verschmelze_fragmente(self, index1: int, index2: int):
+      """Verschmilzt zwei Fragmente zu einem neuen und löscht die alten."""
+      if not (0 <= index1 < len(self._fragmente) and self._fragmente[index1] is not None and \
+              0 <= index2 < len(self._fragmente) and self._fragmente[index2] is not None and index1 != index2):
+          print("Fehler: Ungültige oder inaktive Indices für Verschmelzung.")
+          return
+      
+      print(f"\nVerschmelze Fragmente {index1} und {index2}...")
+      neues_fragment_text = f"{self._fragmente[index1].strip()}. {self._fragmente[index2].strip()}"
+      self.loesche_fragment(index1)
+      self.loesche_fragment(index2)
+      self.fuege_ein(neues_fragment_text)
+
+  # --- Analyse und Reaktion ---
+
+  def spuere_reaktion_des_gewebes(self, impuls: str) -> dict:
+      """Simuliert die Reaktion des Gewebes auf einen externen Impuls, inkl. Wellen."""
+      initial_waves = []
+      for i, fragment_text in enumerate(self._fragmente):
+          if fragment_text is None: continue
+          res = self._spuere_art_und_staerke_der_resonanz(impuls, fragment_text, self._resonanzen_struktur, -1, i)
+          if res and res.staerke > 0.1:
+              initial_waves.append(ResonanzWelle(-1, res.art, res.staerke, [-1, i]))
+
+      self._wave_arrival_effects = {}
+      waves_to_propagate = initial_waves[:]
+      
+      for step in range(3): # Max 3 Hops
+          if not waves_to_propagate: break
+          next_waves = []
+          for wave in waves_to_propagate:
+              current_node_idx = wave.pfad[-1]
+              if current_node_idx not in self._wave_arrival_effects: self._wave_arrival_effects[current_node_idx] = []
+              self._wave_arrival_effects[current_node_idx].append(wave)
+
+              outgoing = self._resonanzen_struktur.get(current_node_idx, {})
+              for target_idx, conn in outgoing.items():
+                  if self._fragmente[target_idx] is None: continue
+                  if len(wave.pfad) > 1 and target_idx == wave.pfad[-2]: continue # No immediate bounce-back
+
+                  new_staerke = wave.staerke * conn.staerke * 0.7 # Damping
+                  if new_staerke > 0.05:
+                      new_wave = ResonanzWelle(wave.ursprung, conn.art, new_staerke, wave.pfad + [target_idx])
+                      next_waves.append(new_wave)
+          waves_to_propagate = next_waves
+
+      zustand_daten = self._analysiere_gewebe_zustand(self._resonanzen_struktur, self._wave_arrival_effects, return_data=True)
+      return {
+          'impuls': impuls,
+          'report': self._analysiere_gewebe_zustand(self._resonanzen_struktur, self._wave_arrival_effects)
+      }
+
+  def finde_fragmente_mit_resonanz(self, impuls: str, gewuenschte_arten: list[str], mindest_staerke: float = 0.2) -> list[str]:
+      """Findet Fragmente, die auf einen Impuls mit bestimmten Resonanz-Arten reagieren."""
+      self.spuere_reaktion_des_gewebes(impuls)
+      gefundene_indices = set()
+      for fragment_index, waves in self._wave_arrival_effects.items():
+          for wave in waves:
+              if wave.art in gewuenschte_arten and wave.staerke >= mindest_staerke:
+                  gefundene_indices.add(fragment_index)
+      
+      return [self._fragmente[i] for i in sorted(list(gefundene_indices))]
+
+  def antworte_aus_resonanz(self, impuls: str, ziel_art: str = "VERSTAERKUNG") -> str:
+      """Generiert ein neues Fragment, das aus den Resonanzen eines Impulses entsteht."""
+      reaktion = self.spuere_reaktion_des_gewebes(impuls)
+      relevante_indices = set()
+      for fragment_index, waves in self._wave_arrival_effects.items():
+          for wave in waves:
+              if wave.art == ziel_art and wave.staerke >= 0.3:
+                  relevante_indices.add(fragment_index)
+      
+      if not relevante_indices:
+          return "Aus dieser Resonanz entsteht noch keine klare Formulierung."
+      
+      combined_text = " ".join([self._fragmente[idx] for idx in relevante_indices])
+      combined_doc = self.nlp(combined_text)
+      concepts = {t.lemma_ for t in combined_doc if t.pos_ in ['NOUN', 'VERB'] and not t.is_stop}
+      kern = ", ".join(list(concepts)[:3])
+      
+      template = f"Die Resonanz um '{kern}' deutet auf eine {ziel_art.lower()} hin."
+      synthetisches_fragment = template
+      self.fuege_ein(synthetisches_fragment)
+      return synthetisches_fragment
+
+  def _analysiere_gewebe_zustand(self, resonanzen_struktur, wave_arrival_effects, return_data=False):
+      """Analysiert und berichtet den aktuellen Zustand des Gewebes."""
+      active_frags = [f for f in self._fragmente if f is not None]
+      all_active_res = [res for res_list in resonanzen_struktur.values() for res in res_list.values() if self._fragmente[res.quelle] and self._fragmente[res.ziel]]
+      
+      res_counts = Counter(res.art for res in all_active_res)
+      dominant_res = res_counts.most_common(1)[0][0] if res_counts else "Keine"
+
+      # Stimmung berechnen
+      self._gewebe_stimmung = {'harmonisch': 0.0, 'spannungsreich': 0.0, 'offen': 0.0, 'reflexiv': 0.0}
+      for res in all_active_res:
+          effekt = self._spuer_muster.get(res.art, {}).get('stimmung_effekt', {})
+          for key, val in effekt.items(): self._gewebe_stimmung[key] += val * res.staerke
+      
+      if return_data:
+          return {'num_active_fragments': len(active_frags), 'dominant_resonance': dominant_res}
+
+      report = [
+          "\n--- Gewebe Zustandsbericht ---",
+          f"Fragmente: {len(active_frags)} aktiv / {len(self._fragmente)} total",
+          f"Resonanzen (aktiv): {len(all_active_res)}",
+          f"Dominante Resonanz: {dominant_res}",
+          f"Stimmung: " + ", ".join([f"{k}:{v:.2f}" for k, v in self._gewebe_stimmung.items()]),
+          "---"
+      ]
+      return "\n".join(report)
+
+  def fuehle_zustand_des_gewebes(self):
+      """Gibt einen Bericht über den aktuellen Zustand des Gewebes aus."""
+      print(self._analysiere_gewebe_zustand(self._resonanzen_struktur, self._wave_arrival_effects))
+
+########################################
+# Datei: ./model_trainer.py
+########################################
+
+import json
+import numpy as np
+import spacy
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.metrics import classification_report, mean_squared_error, r2_score
+from sklearn.preprocessing import LabelEncoder
+import joblib
+import os
+
+# Konstanten für Dateipfade
+DATA_FILE = 'training_data.jsonl'
+ART_CLASSIFIER_FILE = 'triadic_art_classifier.joblib'
+STAERKE_REGRESSOR_FILE = 'triadic_staerke_regressor.joblib'
+LABEL_ENCODER_FILE = 'triadic_label_encoder.joblib'
+
+def load_data(filepath=DATA_FILE):
+    """Lädt die .jsonl Trainingsdaten."""
+    if not os.path.exists(filepath):
+        print(f"Fehler: Trainingsdatendatei '{filepath}' nicht gefunden.")
+        print("Bitte erstellen Sie zuerst Trainingsdaten mit dem Next.js Annotator.")
+        return []
+    data = []
+    with open(filepath, 'r', encoding='utf-8') as f:
+        for line in f:
+            try:
+                data.append(json.loads(line))
+            except json.JSONDecodeError:
+                print(f"Warnung: Ungültige JSON-Zeile übersprungen in {filepath}")
+    return data
+
+def create_features_and_labels(data, nlp):
+    """Erstellt Feature-Vektoren und Labels aus den Rohdaten."""
+    features = []
+    labels_art = []
+    labels_staerke = []
+    
+    print(f"Verarbeite {len(data)} Datenpunkte...")
+    for i, sample in enumerate(data):
+        print(f"  Verarbeite Punkt {i+1}/{len(data)}...", end='\r')
+        doc_a = nlp(sample['fragment_a'])
+        doc_b = nlp(sample['fragment_b'])
+        doc_c = nlp(sample['fragment_c'])
+        
+        # Feature-Vektor: Konkatenation der spaCy-Vektoren der drei Fragmente
+        feature_vector = np.concatenate([doc_a.vector, doc_b.vector, doc_c.vector])
+        features.append(feature_vector)
+        
+        labels_art.append(sample['label']['ergebnis_art'])
+        labels_staerke.append(float(sample['label']['ergebnis_staerke']))
+        
+    print("\nFeature-Erstellung abgeschlossen.")
+    return np.array(features), np.array(labels_art), np.array(labels_staerke)
+
+def train():
+    """Der Haupt-Trainingsprozess."""
+    print("="*50)
+    print("Starte Trainingsprozess für triadische Resonanz-Modelle")
+    print("="*50)
+    
+    # 1. Daten laden
+    trainingsdaten = load_data()
+    if len(trainingsdaten) < 10:
+        print(f"Nicht genügend Trainingsdaten ({len(trainingsdaten)}). Training wird abgebrochen.")
+        print("Es werden mindestens 10 annotierte Beispiele benötigt, um die Modelle sinnvoll zu trainieren.")
+        return
+
+    # 2. NLP-Modell laden und Features erstellen
+    print("\nLade spaCy-Modell 'de_core_news_lg' (kann einen Moment dauern)...")
+    try:
+        nlp = spacy.load("de_core_news_lg")
+    except IOError:
+        print("\n[FEHLER] spaCy-Modell 'de_core_news_lg' nicht gefunden.")
+        print("Bitte führen Sie aus: python -m spacy download de_core_news_lg")
+        return
+    
+    X, y_art_str, y_staerke = create_features_and_labels(trainingsdaten, nlp)
+    
+    # Label-Encoding für Resonanz-Arten (z.B. 'VERSTAERKUNG' -> 0)
+    le = LabelEncoder()
+    y_art = le.fit_transform(y_art_str)
+    
+    # 3. Aufteilung in Trainings- und Testsets (75% Training, 25% Test)
+    # Stratify sorgt für eine gleichmäßige Verteilung der Klassen im Trainings- und Testset
+    stratify_labels = y_art if len(np.unique(y_art)) > 1 else None
+    X_train, X_test, y_art_train, y_art_test, y_staerke_train, y_staerke_test = \
+        train_test_split(X, y_art, y_staerke, test_size=0.25, random_state=42, stratify=stratify_labels)
+    
+    print(f"\nDaten aufgeteilt: {len(X_train)} Trainingsbeispiele, {len(X_test)} Testbeispiele.")
+
+    # 4. Modell für die Resonanz-Art trainieren (Klassifikation)
+    print("\nTrainiere Klassifikationsmodell (RandomForestClassifier)...")
+    art_classifier = RandomForestClassifier(n_estimators=100, random_state=42, class_weight='balanced')
+    art_classifier.fit(X_train, y_art_train)
+    
+    # 5. Modell für die Resonanz-Stärke trainieren (Regression)
+    print("Trainiere Regressionsmodell (RandomForestRegressor)...")
+    staerke_regressor = RandomForestRegressor(n_estimators=100, random_state=42)
+    staerke_regressor.fit(X_train, y_staerke_train)
+    
+    # 6. Modelle evaluieren und Ergebnisse ausgeben
+    print("\n" + "="*20 + " EVALUATION " + "="*21)
+    y_art_pred = art_classifier.predict(X_test)
+    print("\nKlassifikations-Report (Resonanz-Art):")
+    # Sicherstellen, dass die Zielnamen korrekt sind, auch wenn im Testset nicht alle vorkommen
+    target_names = le.inverse_transform(sorted(np.unique(np.concatenate((y_art_test, y_art_pred)))))
+    print(classification_report(y_art_test, y_art_pred, target_names=target_names, zero_division=0))
+    
+    y_staerke_pred = staerke_regressor.predict(X_test)
+    print("\nRegressions-Report (Resonanz-Stärke):")
+    print(f"  Mean Squared Error: {mean_squared_error(y_staerke_test, y_staerke_pred):.4f}")
+    print(f"  R² Score (Bestimmtheitsmaß): {r2_score(y_staerke_test, y_staerke_pred):.4f}")
+    
+    # 7. Modelle und LabelEncoder für die spätere Verwendung speichern
+    print("\n" + "="*18 + " SPEICHERN " + "="*20)
+    joblib.dump(art_classifier, ART_CLASSIFIER_FILE)
+    joblib.dump(staerke_regressor, STAERKE_REGRESSOR_FILE)
+    joblib.dump(le, LABEL_ENCODER_FILE)
+    
+    print(f"Modelle erfolgreich trainiert und gespeichert:")
+    print(f"  -> {ART_CLASSIFIER_FILE}")
+    print(f"  -> {STAERKE_REGRESSOR_FILE}")
+    print(f"  -> {LABEL_ENCODER_FILE}")
+    print("="*50)
+
+if __name__ == "__main__":
+    train()
+
+########################################
+# Datei: ./README.md
+########################################
+
+# Triadische Resonanz Modelle
+
+Dieses Projekt enthält das Skript zum Trainieren von Machine-Learning-Modellen, die triadische Resonanz in Textfragmenten analysieren. Basierend auf drei Textfragmenten (A, B, C) können die Modelle die Art der Resonanz (z.B. Verstärkung, Abschwächung) und deren Stärke vorhersagen.
+
+Das Training basiert auf annotierten Daten, die idealerweise mit einem separaten Next.js Annotator-Tool erstellt werden.
+
+## Features
+
+*   Lädt Trainingsdaten im `.jsonl`-Format.
+*   Verwendet spaCy, um Textfragmente in numerische Feature-Vektoren umzuwandeln.
+*   Trainiert ein Klassifikationsmodell (RandomForestClassifier) zur Vorhersage der Resonanz-Art.
+*   Trainiert ein Regressionsmodell (RandomForestRegressor) zur Vorhersage der Resonanz-Stärke.
+*   Speichert die trainierten Modelle und den LabelEncoder für die spätere Verwendung.
+*   Bietet grundlegende Evaluationsmetriken nach dem Training.
+
+## Installation
+
+Um das Trainingsskript auszuführen, benötigen Sie Python 3.6+ und die erforderlichen Bibliotheken.
+
+1.  **Python installieren:**
+    Stellen Sie sicher, dass Python auf Ihrem System installiert ist. Sie können es von [python.org](https://www.python.org/downloads/) herunterladen.
+
+2.  **Projekt klonen (falls zutreffend):**
+    ```bash
+    git clone <URL_IHRES_REPOS>
+    cd <VERZEICHNIS_IHRES_REPOS>
+    ```
+
+3.  **Virtuelle Umgebung erstellen (empfohlen):**
+    ```bash
+    python -m venv .venv
+    ```
+
+4.  **Virtuelle Umgebung aktivieren:**
+    *   Auf macOS und Linux:
+        ```bash
+        source .venv/bin/activate
+        ```
+    *   Auf Windows:
+        ```bash
+        .venv\Scripts\activate
+        ```
+
+5.  **Abhängigkeiten installieren:**
+    Installieren Sie die benötigten Python-Pakete. Es wird empfohlen, eine `requirements.txt`-Datei zu erstellen, falls noch nicht vorhanden. Die benötigten Pakete sind:
+    *   `numpy`
+    *   `spacy`
+    *   `scikit-learn`
+    *   `joblib`
+
+    Erstellen Sie eine `requirements.txt` Datei mit folgendem Inhalt:
+    ```
+    numpy
+    spacy
+    scikit-learn
+    joblib
+    ```
+
+    Installieren Sie die Pakete:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+6.  **spaCy Modell herunterladen:**
+    Das Skript verwendet das große deutsche spaCy-Modell. Laden Sie es wie folgt herunter:
+    ```bash
+    python -m spacy download de_core_news_lg
+    ```
+
+## Vorbereitung der Daten
+
+Das Skript erwartet Trainingsdaten im `.jsonl`-Format (JSON Lines), wobei jede Zeile ein JSON-Objekt ist, das ein annotiertes Beispiel repräsentiert. Die Standarddatei ist `training_data.jsonl` im selben Verzeichnis wie das Skript.
+
+Jedes JSON-Objekt sollte folgendes Format haben:
+
+```json
+{
+  "fragment_a": "Text des ersten Fragments",
+  "fragment_b": "Text des zweiten Fragments",
+  "fragment_c": "Text des dritten Fragments",
+  "label": {
+    "ergebnis_art": "VERSTAERKUNG" | "ABSCHWAECHUNG" | "NEUTRAL",
+    "ergebnis_staerke": 0.0 bis 1.0
+  }
+}
+```
+
+Stellen Sie sicher, dass diese Datei existiert und mindestens 10 annotierte Beispiele enthält, bevor Sie das Training starten.
+
+## Training der Modelle
+
+Führen Sie das `model_trainer.py`-Skript aus, um die Modelle zu trainieren:
+
+```bash
+python model_trainer.py
+```
+
+Das Skript wird:
+1.  Die Daten laden.
+2.  Features mit spaCy erstellen.
+3.  Die Daten in Trainings- und Testsets aufteilen.
+4.  Die RandomForest-Modelle trainieren.
+5.  Die Modelle evaluieren und die Ergebnisse ausgeben.
+6.  Die trainierten Modelle (`triadic_art_classifier.joblib`, `triadic_staerke_regressor.joblib`) und den LabelEncoder (`triadic_label_encoder.joblib`) im selben Verzeichnis speichern.
+
+## Verwendung der trainierten Modelle
+
+Nach dem Training können die `.joblib`-Dateien in einer separaten Anwendung geladen und verwendet werden, um Vorhersagen für neue triadische Textfragmente zu treffen. Der gespeicherte LabelEncoder wird benötigt, um die numerischen Vorhersagen des Klassifikationsmodells zurück in die ursprünglichen Label-Namen (z.B. 'VERSTAERKUNG') zu übersetzen.
+
+Ein Beispiel zum Laden und Verwenden (nicht Teil dieses Skripts):
+
+```python
+import joblib
+import spacy
+import numpy as np
+
+# Modelle und Encoder laden
+art_classifier = joblib.load('triadic_art_classifier.joblib')
+staerke_regressor = joblib.load('triadic_staerke_regressor.joblib')
+label_encoder = joblib.load('triadic_label_encoder.joblib')
+
+# spaCy Modell laden
+nlp = spacy.load('de_core_news_lg')
+
+# Neue Daten vorbereiten (Beispiel)
+fragment_a_new = "Ein neuer Text A"
+fragment_b_new = "Ein neuer Text B"
+fragment_c_new = "Ein neuer Text C"
+
+doc_a_new = nlp(fragment_a_new)
+doc_b_new = nlp(fragment_b_new)
+doc_c_new = nlp(fragment_c_new)
+
+# Feature-Vektor erstellen
+feature_vector_new = np.concatenate([doc_a_new.vector, doc_b_new.vector, doc_c_new.vector]).reshape(1, -1)
+
+# Vorhersagen treffen
+predicted_art_encoded = art_classifier.predict(feature_vector_new)
+predicted_art_label = label_encoder.inverse_transform(predicted_art_encoded)[0]
+predicted_staerke = staerke_regressor.predict(feature_vector_new)[0]
+
+print(f"Vorhergesagte Resonanz-Art: {predicted_art_label}")
+print(f"Vorhergesagte Resonanz-Stärke: {predicted_staerke:.4f}")
+```
+
+## Dateistruktur
+
+```
+/
+├── model_trainer.py        # Skript zum Trainieren der Modelle
+├── training_data.jsonl     # Trainingsdaten (muss manuell erstellt werden)
+├── README.md               # Diese Datei
+├── requirements.txt        # (Optional) Liste der Python-Abhängigkeiten
+├── triadic_art_classifier.joblib # Gespeichertes Klassifikationsmodell (nach Training)
+├── triadic_staerke_regressor.joblib # Gespeichertes Regressionsmodell (nach Training)
+└── triadic_label_encoder.joblib # Gespeicherter LabelEncoder (nach Training)
+```
+
+## Lizenz
+
+[Fügen Sie hier Ihre Lizenzinformationen ein, z.B. MIT, GPL, etc.]
+
+
+########################################
+# Datei: ./extract.py
+########################################
+
+import os
+
+# Basisverzeichnis deiner Projektstruktur
+basisverzeichnis = "./"
+
+# Ziel-Textdatei
+ausgabedatei = "projekt_inhalte_ausgabe.txt"
+
+# Diese Ordner werden beim Durchlauf ignoriert:
+ausschluss_ordner = {"node_modules", "__pycache__", "dist"}
+
+# Nur diese Dateitypen werden berücksichtigt:
+erlaubte_endungen = {".py",".ts", ".tsx", ".json", ".md", ".html"}
+
+# Rekursives Durchlaufen des Verzeichnisses mit Ausschluss
+def alle_dateien_durchlaufen(verzeichnis: str) -> list[str]:
+    gesammelte_pfade = []
+    for wurzel, ordner, dateien in os.walk(verzeichnis):
+        # Entferne unerwünschte Ordner direkt beim Durchlauf
+        ordner[:] = [d for d in ordner if d not in ausschluss_ordner]
+        for datei in dateien:
+            pfad = os.path.join(wurzel, datei)
+            if os.path.splitext(pfad)[1] in erlaubte_endungen:
+                gesammelte_pfade.append(pfad)
+    return gesammelte_pfade
+
+# Inhalte extrahieren und in Textdatei schreiben
+def inhalte_in_datei_schreiben():
+    dateipfade = alle_dateien_durchlaufen(basisverzeichnis)
+    with open(ausgabedatei, "w", encoding="utf-8") as ausgabe:
+        for pfad in dateipfade:
+            ausgabe.write(f"{'#' * 40}\n# Datei: {pfad}\n{'#' * 40}\n\n")
+            try:
+                with open(pfad, "r", encoding="utf-8") as f:
+                    ausgabe.write(f.read())
+            except Exception as e:
+                ausgabe.write(f"[Fehler beim Lesen der Datei: {e}]\n")
+            ausgabe.write("\n\n")
+    print(f"Fertig! Inhalte wurden in '{ausgabedatei}' gespeichert.")
+
+# Startpunkt
+if __name__ == "__main__":
+    inhalte_in_datei_schreiben()
+
+
+########################################
+# Datei: ./nextjs_annotator\package.json
+########################################
+
+{
+  "name": "nextjs_annotator",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.2.1",
+    "@radix-ui/react-label": "^2.0.2",
+    "@radix-ui/react-slot": "^1.0.2",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.0",
+    "lucide-react": "^0.354.0",
+    "next": "14.1.3",
+    "react": "^18",
+    "react-dom": "^18",
+    "tailwind-merge": "^2.2.1",
+    "tailwindcss-animate": "^1.0.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.0.1",
+    "eslint": "^8",
+    "eslint-config-next": "14.1.3",
+    "postcss": "^8",
+    "tailwindcss": "^3.3.0",
+    "typescript": "^5"
+  }
+}
+
+########################################
+# Datei: ./nextjs_annotator\app\page.tsx
+########################################
+
+"use client"; // Diese Direktive ist für React Hooks erforderlich
+
+import React, { useState, useEffect } from 'react';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+
+export default function Home() {
+  const [inputA, setInputA] = useState('Das Gefühl, das Muster im Ganzen zu erfassen, ist schwer.');
+  const [inputB, setInputB] = useState('Dieser Versuch ist notwendig, um das Gewebe zu verstehen.');
+  const [inputC, setInputC] = useState('Das Zählen ist aber nicht das Verstehen selbst.');
+  
+  const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const [editableResult, setEditableResult] = useState<any>(null);
+
+  useEffect(() => {
+    setEditableResult(analysisResult);
+    setIsSaved(false);
+  }, [analysisResult]);
+
+  const handleAnalyze = async () => {
+    setLoading(true);
+    setAnalysisResult(null);
+    setEditableResult(null);
+
+    const response = await fetch('/api/gemini-triadic-analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inputA, inputB, inputC })
+    });
+
+    if (response.ok) {
+        const json = await response.json();
+        setAnalysisResult(json);
+    } else {
+        alert("Analyse fehlgeschlagen. Prüfen Sie die Konsole.");
+    }
+    setLoading(false);
+  };
+
+  const handleSave = async () => {
+    if (!editableResult) return;
+    const trainingSample = {
+      fragment_a: inputA,
+      fragment_b: inputB,
+      fragment_c: inputC,
+      label: editableResult
+    };
+
+    const response = await fetch('/api/save-training-sample', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(trainingSample)
+    });
+
+    if (response.ok) {
+      setIsSaved(true);
+      alert('Trainingsbeispiel erfolgreich im Python-Verzeichnis gespeichert!');
+    } else {
+      alert('Fehler beim Speichern.');
+    }
+  };
+
+  const handleFieldChange = (field: string, value: string | number) => {
+    if (!editableResult) return;
+    setEditableResult({ ...editableResult, [field]: value });
+  };
+
+  return (
+    <main className="flex min-h-screen flex-col items-center p-12 bg-gray-50">
+        <div className="p-6 space-y-4 max-w-2xl w-full bg-white rounded-lg shadow-md">
+        <h1 className="text-2xl font-bold text-center">Triadische Resonanz-Annotation</h1>
+        <p className="text-sm text-gray-600 text-center">Generieren Sie Trainingsdaten für das "Gewebe des Verstehens".</p>
+        
+        <div className="space-y-2">
+            <Label htmlFor="fragA">Fragment A</Label>
+            <Textarea id="fragA" placeholder="Fragment A" value={inputA} onChange={e => setInputA(e.target.value)} rows={3} />
+        </div>
+        <div className="space-y-2">
+            <Label htmlFor="fragB">Fragment B</Label>
+            <Textarea id="fragB" placeholder="Fragment B" value={inputB} onChange={e => setInputB(e.target.value)} rows={3} />
+        </div>
+        <div className="space-y-2">
+            <Label htmlFor="fragC">Fragment C (Einfluss)</Label>
+            <Textarea id="fragC" placeholder="Fragment C (Einfluss)" value={inputC} onChange={e => setInputC(e.target.value)} rows={3} />
+        </div>
+
+        <Button onClick={handleAnalyze} disabled={loading} className="w-full">
+            {loading ? 'Analysiere...' : 'Analyse mit Gemini starten'}
+        </Button>
+
+        {editableResult && (
+            <Card>
+            <CardHeader><CardTitle>Analyse-Ergebnis (bearbeitbar)</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+                <div>
+                <Label htmlFor="einfluss">Einfluss-Beschreibung</Label>
+                <Input id="einfluss" value={editableResult.einfluss_beschreibung} onChange={e => handleFieldChange('einfluss_beschreibung', e.target.value)} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <Label htmlFor="resArt">Ergebnis Art</Label>
+                    <Input id="resArt" value={editableResult.ergebnis_art} onChange={e => handleFieldChange('ergebnis_art', e.target.value)} />
+                </div>
+                <div>
+                    <Label htmlFor="resStaerke">Ergebnis Stärke</Label>
+                    <Input id="resStaerke" type="number" step="0.01" value={editableResult.ergebnis_staerke} onChange={e => handleFieldChange('ergebnis_staerke', parseFloat(e.target.value))} />
+                </div>
+                </div>
+                <Button onClick={handleSave} disabled={isSaved} variant="outline" className="w-full">
+                {isSaved ? 'Gespeichert!' : 'Annotation als Trainingsdaten speichern'}
+                </Button>
+            </CardContent>
+            </Card>
+        )}
+        </div>
+    </main>
+  );
+}
+
+########################################
+# Datei: ./nextjs_annotator\app\layout.tsx
+########################################
+
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+
+const inter = Inter({ subsets: ["latin"] });
+
+export const metadata: Metadata = {
+  title: "Triadische Resonanz-Annotation",
+  description: "Trainingsdaten für das Gewebe des Verstehens generieren",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="de">
+      <body className={inter.className}>{children}</body>
+    </html>
+  );
+}
+
+########################################
+# Datei: ./nextjs_annotator\app\api\save-training-sample\route.ts
+########################################
+
+import { NextRequest, NextResponse } from "next/server";
+import fs from "fs/promises";
+import path from "path";
+
+// Der Pfad zeigt auf das Python-Verzeichnis, um die Daten direkt dort zu speichern
+const dataFilePath = path.join(process.cwd(), '..', 'python_gewebe', 'training_data.jsonl');
+
+export async function POST(req: NextRequest) {
+  try {
+    const sample = await req.json();
+
+    if (!sample.fragment_a || !sample.fragment_b || !sample.fragment_c || !sample.label) {
+      return NextResponse.json({ error: "Ungültige Daten" }, { status: 400 });
+    }
+
+    const dataLine = JSON.stringify(sample) + '\n';
+
+    await fs.appendFile(dataFilePath, dataLine, 'utf-8');
+
+    return NextResponse.json({ message: "Erfolgreich gespeichert" }, { status: 200 });
+
+  } catch (error) {
+    console.error("Fehler beim Speichern der Trainingsdaten:", error);
+    return NextResponse.json({ error: "Speichern fehlgeschlagen" }, { status: 500 });
+  }
+}
+
+########################################
+# Datei: ./nextjs_annotator\app\api\gemini-triadic-analyze\route.ts
+########################################
+
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { NextRequest, NextResponse } from "next/server";
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+
+const ALL_RESONANCE_TYPES = [
+    'VERSTAERKUNG', 'KONTRAST', 'ERGAENZUNG', 'FORTSETZUNG', 'BEISPIEL',
+    'HINTERGRUND', 'PERSPEKTIVE_WECHSEL', 'EMOTIONALE_HARMONIE',
+    'EMOTIONALE_SPANNUNG', 'STRUKTURELLE_ANALOGIE', 'NEUTRAL_SCHWACH',
+    'KONFLIKT', 'ECHTBEZUG', 'ENTWICKLUNG'
+];
+
+export async function POST(req: NextRequest) {
+  try {
+    const { inputA, inputB, inputC } = await req.json();
+
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    const prompt = `
+      Du bist ein Experte für Textanalyse und das Konzept der "Resonanz" zwischen Textfragmenten.
+      Analysiere, wie Fragment C die semantische und emotionale Beziehung zwischen Fragment A und B verändert.
+
+      Fragment A: "${inputA}"
+      Fragment B: "${inputB}"
+      Fragment C (der Einfluss): "${inputC}"
+
+      Gib deine Analyse als striktes JSON-Objekt zurück, ohne Markdown-Formatierung. Das JSON-Objekt MUSS die folgenden Schlüssel enthalten:
+      - "einfluss_beschreibung": Eine kurze, prägnante Beschreibung in einem Satz, wie C die Beziehung verändert (z.B. "C bildet eine Brücke", "C stellt einen Widerspruch her").
+      - "ergebnis_art": Die wahrscheinlichste Resonanz-Art zwischen A und B NACH dem Einfluss von C. Wähle eine aus: ${ALL_RESONANCE_TYPES.join(', ')}.
+      - "ergebnis_staerke": Eine Fließkommazahl zwischen 0.0 und 1.0 für die Stärke der neuen Resonanz.
+
+      Beispiel-Ausgabe:
+      {
+        "einfluss_beschreibung": "C verstärkt das gemeinsame Thema 'Versuch' und schafft eine logische Fortsetzung.",
+        "ergebnis_art": "FORTSETZUNG",
+        "ergebnis_staerke": 0.75
+      }
+    `;
+
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
+    const data = JSON.parse(responseText);
+
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("Fehler bei der Gemini-API-Anfrage:", error);
+    return NextResponse.json({ error: "Analyse fehlgeschlagen" }, { status: 500 });
+  }
+}
+
