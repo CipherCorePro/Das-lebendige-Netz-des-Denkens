@@ -1,0 +1,313 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Documentation: Das lebendige Netz des Denkens</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style type="text/tailwindcss">
+        @layer base {
+            body {
+                font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+                line-height: 1.6;
+            }
+            h1, h2, h3 {
+                @apply font-bold mb-4;
+            }
+            h1 { @apply text-3xl; }
+            h2 { @apply text-2xl mt-6; }
+            h3 { @apply text-xl mt-4; }
+            p { @apply mb-4; }
+            ul { @apply list-disc pl-5 mb-4; }
+            li { @apply mb-2; }
+            code {
+                @apply bg-gray-200 px-1 py-0.5 rounded text-sm font-mono;
+            }
+            pre {
+                @apply bg-gray-800 text-gray-100 p-4 rounded overflow-x-auto mb-4;
+            }
+            pre code {
+                 @apply bg-transparent p-0 text-gray-100;
+            }
+            /* Specific styles for Mermaid container */
+            .mermaid {
+                background-color: white;
+                padding: 1rem;
+                border-radius: 0.5rem;
+                box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+                overflow-x: auto; /* Ensure diagram is scrollable if too wide */
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 p-6">
+    <div class="container mx-auto max-w-4xl bg-white rounded-lg shadow-xl p-8">
+
+        <header class="text-center mb-8">
+            <h1 class="text-4xl text-gray-900">Project Documentation: Das lebendige Netz des Denkens</h1>
+            <p class="text-lg text-gray-600">An ML-Assisted Resonance Model for Text Understanding</p>
+        </header>
+
+        <section id="overview" class="mb-8">
+            <h2 class="text-gray-900">Project Overview</h2>
+            <p>
+                "Das lebendige Netz des Denkens" (The Living Network of Thought) is a prototype for a novel AI architecture called a **Contextual Meaning Field Network (CMFN)**. This system aims to model text understanding not through sequential token prediction like traditional LLMs, but as a dynamic field of relationships and "resonances" between text fragments.
+            </p>
+            <p>
+                The core idea is that meaning emerges from the interaction and influence between semantic units. Text fragments are represented as nodes in a graph, connected by edges representing qualitative "resonances" (e.g., reinforcement, contrast) with varying strengths.
+            </p>
+            <p>
+                A key innovation is the explicit modeling of **triadic resonance**: how a third text fragment (C) influences the existing relationship between two others (A and B). This "sensing logic" is implemented using a hybrid approach:
+            </p>
+            <ul>
+                <li>A primary mode uses small, trained Machine Learning models (Random Forest) to predict the resulting resonance type and strength based on the input fragments.</li>
+                <li>A fallback heuristic mode provides a rule-based analysis if no trained models are available.</li>
+            </ul>
+            <p>
+                To train the ML models, the project includes a web-based annotation tool (built with Next.js) that leverages Google Gemini 1.5 Flash. This tool facilitates a "Human-in-the-Loop" workflow where Gemini can generate potential text triads and provide initial resonance analyses, which a human annotator can then review, correct, and save as structured training data.
+            </p>
+            <p>
+                The Python backend (`python_gewebe`) contains the CMFN core, including mechanisms for adding fragments, analyzing resonances (using the hybrid ML/heuristic logic), simulating "resonance waves" propagating through the network, and generating responses based on the network's state. The project demonstrates a shift towards an architecture focused on contextual depth and associative reasoning rather than purely generative capabilities based on statistical patterns.
+            </p>
+        </section>
+
+        <section id="architecture" class="mb-8">
+            <h2 class="text-gray-900">Architecture Diagram</h2>
+            <p>The following sequence diagram illustrates the main workflows within the system: Annotation, Training, and Application.</p>
+            <div class="mermaid">
+%% title: Das lebendige Netz des Denkens - System Architecture Sequence Diagram
+sequenceDiagram
+    participant User as 👤 User
+    participant AnnotatorUI as 🖥️ Annotator UI
+    participant NextjsAPI as 🌐 Next.js API
+    participant Gemini as 🔗 Google Gemini
+    participant TrainingData as 📄 Training Data File
+    participant ModelTrainer as ⚙️ Model Trainer
+    participant CMFNCore as 🧠 CMFN Core
+    participant JoblibModels as 💾 Joblib Models
+    participant SpaCy as ⚙️ spaCy Library
+
+    %% === Annotation Workflow ===
+    User->>AnnotatorUI: Request Generate Triad (Optional)
+    activate User
+    activate AnnotatorUI
+    AnnotatorUI->>NextjsAPI: POST /gemini-generate-triads (Topic)
+    activate NextjsAPI
+    NextjsAPI->>Gemini: Generate Text Triad (Prompt)
+    activate Gemini
+    Gemini-->>NextjsAPI: Triad JSON (A, B, C)
+    deactivate Gemini
+    NextjsAPI-->>AnnotatorUI: Triad JSON
+    deactivate NextjsAPI
+    deactivate AnnotatorUI
+
+    User->>AnnotatorUI: Input/Edit Triad (A, B, C) & Request Analyze
+    activate AnnotatorUI
+    AnnotatorUI->>NextjsAPI: POST /gemini-triadic-analyze (A, B, C)
+    activate NextjsAPI
+    NextjsAPI->>Gemini: Analyze Triad Resonance (Prompt)
+    activate Gemini
+    Gemini-->>NextjsAPI: Analysis JSON (Type, Strength)
+    deactivate Gemini
+    NextjsAPI-->>AnnotatorUI: Analysis JSON
+    deactivate NextjsAPI
+    deactivate AnnotatorUI
+
+    User->>AnnotatorUI: Review/Edit Analysis & Request Save
+    activate AnnotatorUI
+    AnnotatorUI->>NextjsAPI: POST /save-training-sample (A, B, C, Label)
+    activate NextjsAPI
+    NextjsAPI->>TrainingData: Append JSONL line
+    activate TrainingData
+    TrainingData-->>NextjsAPI: Success
+    deactivate TrainingData
+    NextjsAPI-->>AnnotatorUI: Save Confirmation
+    deactivate NextjsAPI
+    deactivate AnnotatorUI
+    deactivate User
+
+    %% === Training Workflow ===
+    User->>ModelTrainer: Run model_trainer.py
+    activate User
+    activate ModelTrainer
+    ModelTrainer->>TrainingData: Read training_data.jsonl
+    activate TrainingData
+    TrainingData-->>ModelTrainer: Training Data
+    deactivate TrainingData
+    ModelTrainer->>SpaCy: Load Model (de_core_news_lg)
+    activate SpaCy
+    SpaCy-->>ModelTrainer: SpaCy Model
+    deactivate SpaCy
+    ModelTrainer->>SpaCy: Process Text (Vectorization)
+    activate SpaCy
+    SpaCy-->>ModelTrainer: Feature Vectors
+    deactivate SpaCy
+    ModelTrainer->>ModelTrainer: Train ML Models (Random Forest)
+    ModelTrainer->>JoblibModels: Save Models (.joblib files)
+    activate JoblibModels
+    JoblibModels-->>ModelTrainer: Save Confirmation
+    deactivate JoblibModels
+    ModelTrainer-->>User: Training Report
+    deactivate ModelTrainer
+    deactivate User
+
+    %% === Application Workflow ===
+    User->>CMFNCore: Run main.py (Initialize CMFN)
+    activate User
+    activate CMFNCore
+    CMFNCore->>SpaCy: Load Model (if not already loaded)
+    activate SpaCy
+    SpaCy-->>CMFNCore: SpaCy Model
+    deactivate SpaCy
+    CMFNCore->>JoblibModels: Attempt to Load Models
+    activate JoblibModels
+    JoblibModels-->>CMFNCore: Models (or not found)
+    deactivate JoblibModels
+    CMFNCore->>CMFNCore: Add Fragments (uses SpaCy)
+    CMFNCore->>CMFNCore: Analyze Resonance (uses SpaCy + ML Models/Heuristics)
+    CMFNCore->>CMFNCore: Simulate Waves (uses internal structure)
+    CMFNCore->>CMFNCore: Find Fragments (uses internal structure)
+    CMFNCore->>CMFNCore: Generate Response (uses internal structure)
+    CMFNCore->>CMFNCore: Modify Structure (Add/Delete/Merge)
+    CMFNCore-->>User: Results/Reports
+    deactivate CMFNCore
+    deactivate User
+            </div>
+            <p class="text-sm text-gray-600 mt-2"><em>Note: The diagram requires JavaScript to render.</em></p>
+        </section>
+
+        <section id="components" class="mb-8">
+            <h2 class="text-gray-900">Component Breakdown</h2>
+            <p>The project is structured into two main directories:</p>
+
+            <h3 class="text-gray-800"><code>python_gewebe/</code> - The CMFN Core</h3>
+            <p>Contains the core Python implementation of the Contextual Meaning Field Network.</p>
+            <ul>
+                <li>
+                    <code>main.py</code>: The main script demonstrating how to initialize and interact with the CMFN. It adds fragments, analyzes reactions to impulses, searches for resonances, and shows structural modifications (delete/merge). It automatically loads trained ML models if found.
+                </li>
+                <li>
+                    <code>text_gewebe.py</code>: (Not provided, but its role is inferred) This file likely contains the core <code>NeuesTextVerstehen</code> class, implementing the graph structure, fragment handling, resonance calculation (dyadic and triadic), resonance wave simulation, and generative functions. It integrates with spaCy for text processing and loads ML models for triadic resonance analysis.
+                </li>
+                <li>
+                    <code>model_trainer.py</code>: Script responsible for training the Machine Learning models (Random Forest Classifier and Regressor) for triadic resonance analysis. It reads data from <code>training_data.jsonl</code>, uses spaCy for feature extraction (text vectorization), splits data, trains models, evaluates them, and saves the trained models and the label encoder using <code>joblib</code>.
+                </li>
+                <li>
+                    <code>training_data.jsonl</code>: A JSON Lines file that stores the curated training examples generated by the Next.js annotator. Each line is a JSON object containing the three fragments (A, B, C) and the human-validated label (resulting resonance type and strength).
+                </li>
+                <li>
+                    <code>requirements.txt</code>: Lists the Python dependencies required for the backend (e.g., <code>spacy</code>, <code>scikit-learn</code>, <code>joblib</code>, <code>numpy</code>).
+                </li>
+                <li>
+                    <code>triadic_art_classifier.joblib</code>, <code>triadic_staerke_regressor.joblib</code>, <code>triadic_label_encoder.joblib</code>: Files generated by <code>model_trainer.py</code> containing the saved ML models and the label encoder for resonance types.
+                </li>
+            </ul>
+
+            <h3 class="text-gray-800"><code>nextjs_annotator/</code> - The Web Annotation Tool</h3>
+            <p>Contains the Next.js application providing a user interface for generating and annotating training data.</p>
+            <ul>
+                <li>
+                    <code>app/page.tsx</code>: The main React component for the annotation page. Manages the UI state (input fragments, analysis results, loading states), handles user interactions (button clicks), and makes API calls to the backend Next.js routes. Uses components from <code>@/components/ui</code> (shadcn/ui).
+                </li>
+                <li>
+                    <code>app/api/gemini-generate-triads/route.ts</code>: A Next.js API route that accepts a topic and uses the Google Gemini API to generate a set of three text fragments (A, B, C) based on that topic, formatted as JSON.
+                </li>
+                <li>
+                    <code>app/api/gemini-triadic-analyze/route.ts</code>: A Next.js API route that takes three fragments (A, B, C) and uses the Google Gemini API to provide an initial analysis of the triadic resonance, suggesting a resonance type and strength, formatted as JSON.
+                </li>
+                <li>
+                    <code>app/api/save-training-sample/route.ts</code>: A Next.js API route that receives a complete annotated sample (fragments A, B, C, and the validated label) and appends it as a new line to the <code>training_data.jsonl</code> file in the <code>python_gewebe</code> directory.
+                </li>
+                <li>
+                    <code>components/ui/...</code>: Contains various UI components (Button, Card, Input, Label, Textarea, Separator) likely generated using a UI library like shadcn/ui, providing a consistent and styled look for the annotator interface.
+                </li>
+                <li>
+                    <code>.env.local</code>: Configuration file for the Next.js app, specifically used to store the <code>GEMINI_API_KEY</code> securely.
+                </li>
+            </ul>
+        </section>
+
+        <section id="dependencies" class="mb-8">
+            <h2 class="text-gray-900">Key Dependencies</h2>
+            <ul>
+                <li>
+                    <strong>React & Next.js:</strong> Frontend framework for building the user interface of the annotation tool. Next.js provides server-side rendering, routing, and API routes.
+                </li>
+                <li>
+                    <strong>Tailwind CSS:</strong> A utility-first CSS framework used for styling the Next.js annotation tool, enabling rapid UI development with pre-defined classes.
+                </li>
+                 <li>
+                    <strong>Mermaid.js:</strong> A JavaScript library used to render diagrams and flowcharts from text-based definitions, used here to visualize the system architecture.
+                </li>
+                <li>
+                    <strong>@google/generative-ai:</strong> The official Node.js client library for interacting with the Google Gemini API, used by the Next.js backend routes for text generation and analysis.
+                </li>
+                <li>
+                    <strong>spaCy:</strong> An industrial-strength Natural Language Processing library for Python. Used in the <code>python_gewebe</code> backend for tasks like tokenization, part-of-speech tagging, named entity recognition, and crucially, generating vector representations of text fragments, which serve as features for the ML models.
+                </li>
+                <li>
+                    <strong>scikit-learn:</strong> A popular Machine Learning library for Python. Used in <code>model_trainer.py</code> to train the Random Forest Classifier (for resonance type) and Random Forest Regressor (for resonance strength).
+                </li>
+                <li>
+                    <strong>joblib:</strong> A library for pipelining Python functions. Used here for efficiently saving and loading the trained scikit-learn models and the LabelEncoder.
+                </li>
+            </ul>
+        </section>
+
+        <section id="setup-usage" class="mb-8">
+            <h2 class="text-gray-900">Setup and Usage</h2>
+            <p>Follow these steps to set up and run the project locally:</p>
+
+            <h3 class="text-gray-800">1. Clone the Repository</h3>
+            <pre><code>git clone &lt;repository-url&gt;
+cd Das-lebendige-Netz-des-Denkens-main</code></pre>
+
+            <h3 class="text-gray-800">2. Setup Python Backend (<code>python_gewebe/</code>)</h3>
+            <pre><code>cd python_gewebe
+python -m venv venv
+# On macOS/Linux:
+source venv/bin/activate
+# On Windows:
+venv\Scripts\activate
+pip install -r requirements.txt
+python -m spacy download de_core_news_lg</code></pre>
+
+            <h3 class="text-gray-800">3. Setup Next.js Frontend (<code>nextjs_annotator/</code>)</h3>
+            <pre><code>cd ../nextjs_annotator
+npm install</code></pre>
+            <p>Create a <code>.env.local</code> file in the <code>nextjs_annotator/</code> directory and add your Google Gemini API key:</p>
+            <pre><code>GEMINI_API_KEY="YOUR_GOOGLE_AI_STUDIO_API_KEY"</code></pre>
+
+            <h3 class="text-gray-800">4. Workflow: Annotate Data</h3>
+            <p>Generate training data using the web tool:</p>
+            <pre><code>cd nextjs_annotator
+npm run dev</code></pre>
+            <p>Open your browser to <code>http://localhost:3000</code>. Use the UI to generate new triads (optional), input/edit fragments, analyze them with Gemini, review the analysis, and click "Annotation als Trainingsdaten speichern" to save samples to <code>python_gewebe/training_data.jsonl</code>. Aim for at least 10-20 samples, ideally 50+.</p>
+
+            <h3 class="text-gray-800">5. Workflow: Train Models</h3>
+            <p>Train the ML models using the collected data:</p>
+            <pre><code>cd ../python_gewebe
+# Ensure your Python venv is activated
+python model_trainer.py</code></pre>
+            <p>This script will read <code>training_data.jsonl</code>, train the models, and save them as <code>.joblib</code> files.</p>
+
+            <h3 class="text-gray-800">6. Workflow: Run the CMFN</h3>
+            <p>Execute the main script to use the CMFN with the trained models (if available):</p>
+            <pre><code>cd python_gewebe
+# Ensure your Python venv is activated
+python main.py</code></pre>
+            <p>The script will demonstrate adding fragments, analyzing reactions, searching, and generative capabilities, utilizing the trained ML models for triadic resonance analysis if they exist.</p>
+        </section>
+
+    </div>
+
+    <!-- Mermaid initialization script -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ startOnLoad: true });
+    </script>
+</body>
+</html>
+```
